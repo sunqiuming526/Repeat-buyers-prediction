@@ -156,12 +156,12 @@ if __name__ == "__main__":
 
         # scaler是由预处理StandardScaler()得到的
         feat_scale = scaler.transform(feature_all)
-        print feat_scale
+        # print feat_scale
         # =======================================================================
         # chi2,卡方统计量，X中特征取值必须非负。
         # 卡方检验用来测度随机变量之间的依赖关系。
         #通过卡方检验得到的特征之间是最可能独立的随机变量，因此这些特征的区分度很高。
-        feat_scale = SelectKBest(chi2, k=23).fit_transform(feat_scale, label)
+        #feat_scale = SelectKBest(chi2, k=23).fit_transform(feat_scale, label)
         # =======================================================================
 
     #   ??? 这两行有神魔用
@@ -208,13 +208,12 @@ if __name__ == "__main__":
 
             tmp_score, svm_model = SVMModelDecision(train_x, train_y, test_P, test_N)
             score_svm.append(tmp_score)
-            #score_total_svm = score_total_svm + np.array(tmp_score)/float(5)
 
 
             #check training set accuracy
             sum_Ptrain = sum(svm_model.predict(train_P))
             sum_Ntrain = len(train_N) - sum(svm_model.predict(train_N))
-            print 'training set acc:', sum_Ptrain, sum_Ntrain
+            print 'training set acc:', sum_Ptrain / len(train_P), sum_Ntrain / len(train_N)
 
             svm_models.append(svm_model)
 
@@ -260,12 +259,11 @@ if __name__ == "__main__":
 
             tmp_score, rf_model = RfModelDecision(train_x, train_y, test_P, test_N)
             score_rf.append(tmp_score)
-            #score_total_rf = score_total_rf + np.array(score_rf)/float(5)
 
             #check training set accuracy
             sum_Ptrain = sum(rf_model.predict(train_P))
             sum_Ntrain = len(train_N) - sum(rf_model.predict(train_N))
-            print 'training set acc:', sum_Ptrain, sum_Ntrain
+            print 'training set acc:', sum_Ptrain / len(train_P), sum_Ntrain / len(train_N)
 
             rf_models.append(rf_model)
 
@@ -361,13 +359,13 @@ if __name__ == "__main__":
         score_total_svm = np.array([[0,0]]*len(test_feat))
         for svm_model in svm_models:
             score_tmp = svm_model.predict_proba(test_feat)
-            score_total_svm = score_total_svm + score_tmp/float(10)
+            score_total_svm = score_total_svm + score_tmp/float(5)
 
         print "random forest predict..."
         score_total_rf = np.array([[0,0]]*len(test_feat))
         for rf_model in rf_models:
             score_tmp = rf_model.predict_proba(test_feat)
-            score_total_rf = score_total_rf + score_tmp/float(10)
+            score_total_rf = score_total_rf + score_tmp/float(5)
 
         score_tmp = (score_total_svm +score_total_rf)/2
         score_final = [x[1] for x in score_tmp]
