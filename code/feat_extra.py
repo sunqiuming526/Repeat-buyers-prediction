@@ -10,6 +10,9 @@ import csv
 from collections import Counter
 import pickle
 import threading
+from sklearn import preprocessing
+
+
 '''
 用户特征：用户购买的天数，重复购买的次数，购买的次数，收藏次数，加购物车次数，点击天数，年龄，性别
 
@@ -120,9 +123,9 @@ def genCateDict(tr_samp):       #tr_samp假设已经转为int类型
                 #share of product in the category
                 cate_feat[key_isused] = [float(sales_product)/total_sale_cate]
 
-                cate_feat[key_isused].append(total_seller_cate)
+                cate_feat[key_isused].append(total_seller_cate) # 这个类的所有卖家
                 cate_feat[key_isused].append(num_repeat_buyer)
-                cate_feat[key_isused].append(total_sale_cate)
+                cate_feat[key_isused].append(total_sale_cate)  # 这个类的总销量
 
                 isused_dict[key_isused] = 1
 
@@ -230,6 +233,21 @@ def genSellerDict(tr_samp):
 
         seller_path.close()
 
+        #========计算购买天数的deviation=========
+        individual_buy_days_dict = {} # 计算deviation要用（the for loop down below）
+        for row in seller_log:
+            if individual_buy_days_dict.has_key(row[0]):
+                individual_buy_days_dict[row[0]].add(row[5])
+            else:
+                individual_buy_days_dict[row[0]] = set(row[5])
+        # 循环外计算deviation
+        date_list = []
+        for set in individual_buy_days_dict.itervalues():
+            date_list.append(len(set))
+        date_deviation = np.std(date_list)
+        date_med = np.median(date_list)
+        date_avg = np.average(date_list)
+
         #the total number of users who has bought at this seller
         usr_log_buy = [x for x in seller_logs if x[6] == 2]
         num_usr_buy = len(Counter([x[0] for x in usr_log_buy]))
@@ -267,7 +285,7 @@ def genSellerDict(tr_samp):
                     sales_product.append(sales_tmp)
                     num_repeated_product.append(num_repeated_tmp)
 
-        #========此处需要更改，用户所该买的类别可能不止一种，也应该使用最大最小均值统计==========================#
+        #========此处需要更改，用户所购买的类别可能不止一种，也应该使用最大最小均值统计==========================#
                     #category feature between the usr and the seller
                     key_cate = key_seller + '+' + str(row[2]) + '+' + str(row[1])
                     cate_feat_product_usr = cate_feat[key_cate] # 从key_cate中提取数据 key => userID + sellerID + cateID + itemID
@@ -294,7 +312,8 @@ def genSellerDict(tr_samp):
                 seller_dict[key_isused] = [total_sales, num_usr_buy, num_repeated_buyer,num_collect_seller, num_cart_seller,\
                                             days_click_usr, num_collect_usr, num_cart_usr, num_buy_usr,\
                                             min_sales_product, max_sales_product, mean_sales_product,\
-                                            min_repeated_product, max_repeated_product, mean_repeated_producr] + cate_feat_product_usr
+                                            min_repeated_product, max_repeated_product, mean_repeated_producr,\
+                                            date_deviation, date_med, date_avg] + cate_feat_product_usr
 
                 isused_dict[key_isused] = 1
     #商户：总销量，总共买家数量，重复买家数量，被收藏的总数量，被加购物车总次数
@@ -314,11 +333,19 @@ def _countDaysbyUsr(usr_logs):
     usr_buy_days = len(count_date)
 
     a = {}
+    repeated_buy_days_list = []
     for row in buy_log:
         if a.has_key(row[3]):
             a[row[3]].append(row[5])
+            repeated_buy_days.append(row[5])
         else:
             a[row[3]] = [row[5]]
+
+    repeated_buy_days = len(set(repeated_buy_days_list))
+    repeated_days_ratio = repeated_buy_days / usr_buy_days #重复购买的天数占总天数的比例
+
+
+
 
     num_repeatebuy = 0
     for value in a.itervalues():
@@ -327,7 +354,7 @@ def _countDaysbyUsr(usr_logs):
 
     num_buys = len(buy_log)
 
-    return [usr_buy_days, num_repeatebuy, num_buys]
+    return [usr_buy_days, repeated_days_ratio, num_repeatebuy, num_buys]
 
 #num of collection、 num of cart、 online days on taobao
 def _countCollectandCart(usr_logs):
@@ -358,9 +385,12 @@ def genUsrDict():
         if row[1] == '':
             row[1] = 3
         if row[2] == '' or row[2] == 2:
-            row[2] = 0.5
-        usr_info_dict[str(row[0])] = [row[1], row[2]]
+            row[2] = 2
+        disc_feat = [row[1], row[2]];
+        dummy = enc.transform([disc_feat]).toarray().tolist()[0]
+        usr_info_dict[str(row[0])] = dummy
     usr_info_file.close()
+
 
     for filename in os.listdir("../data/usr_id"):
         # print 'usr_id/'+filename
@@ -375,12 +405,27 @@ def genUsrDict():
 
         usr_path.close()
 
-        usr_buy_days, num_repeatebuy, num_buys = _countDaysbyUsr(usr_logs)
+        #========计算购买天数的deviation=========
+        individual_buy_days_dict = {} # 计算deviation要用（the for loop down below）
+        for row in seller_log:
+            if individual_buy_days_dict.has_key(row[3]):
+                individual_buy_days_dict[row[3]].add(row[5])
+            else:
+                individual_buy_days_dict[row[3]] = set(row[5])
+        # 循环外计算deviation
+        date_list = []
+        for set in individual_buy_days_dict.itervalues():
+            date_list.append(len(set))
+        date_deviation = np.std(date_list)
+        date_med = np.median(date_list)
+        date_avg = np.average(date_list)
+
+        usr_buy_days, repeated_days_ratio, num_repeatebuy, num_buys = _countDaysbyUsr(usr_logs)
         num_collect, num_cart, usr_click_days = _countCollectandCart(usr_logs)
 
-        usr_dict[str(row[0])] = [usr_buy_days, num_repeatebuy, num_buys,\
-                                        num_collect, num_cart, usr_click_days] + usr_info_dict[str(row[0])]
-
+        usr_dict[str(row[0])] = [usr_buy_days, repeated_days_ratio, num_repeatebuy, num_buys,\
+                                        num_collect, num_cart, usr_click_days, \
+                                        date_deviation, date_med, date_avg] + usr_info_dict[str(row[0])]
     return usr_dict
 
 
@@ -441,6 +486,10 @@ class MyThread(threading.Thread):
 
 
 if __name__ == "__main__":
+    # ===== 初始化 one hot encoder ======
+    enc = preprocessing.OneHotEncoder()
+    enc.fit([[0,0],[1,1],[2,2],[3,2],[4,2],[5,2],[6,2],[7,2],[8,2]])
+    #=====================================================================
 
     trainfile = open("../data/test_format1.csv", 'r') # 是不是应该train_format1.csv  =>  因为训练集&预测集要分开来
     train_read = csv.reader(trainfile)
